@@ -7,16 +7,19 @@ import { NodeExtensionService } from './canvas-graph/node-extension.service';
 import { WorkflowService } from './workflow.service';
 import { CanvasGraphComponent } from './canvas-graph/canvas-graph.component';
 import { WorkflowEditorComponent } from './workflow-editor/workflow-editor.component';
+import { WorkflowViewerComponent } from './workflow-viewer/workflow-viewer.component';
 
+import { HttpClientModule } from '@angular/common/http'
 
 @NgModule({
   declarations: [
     AppComponent,
     CanvasGraphComponent,
-    WorkflowEditorComponent
+    WorkflowEditorComponent,
+    WorkflowViewerComponent
   ],
   imports: [
-    BrowserModule
+    BrowserModule,HttpClientModule
   ],
   providers: [
     NodeExtensionService,

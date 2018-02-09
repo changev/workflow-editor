@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild, Input, Output, EventEmitter } from '@angular/core';
+import { Component, OnInit, ViewChild, Input, Output, EventEmitter, ElementRef } from '@angular/core';
 import * as _ from 'lodash';
 import { NodeExtensionService } from './node-extension.service';
 import { WorkflowService } from '../workflow.service';
@@ -23,6 +23,7 @@ export class CanvasGraphComponent implements OnInit {
   graph: any;
 
   constructor(
+    public element: ElementRef,
     public nodeExtensionService: NodeExtensionService,
     public workflowService: WorkflowService
   ){
@@ -36,17 +37,14 @@ export class CanvasGraphComponent implements OnInit {
   ngOnInit() {
     this.onWorkflowInput.subscribe(
       workflow => {
-        console.log(this.workflow)
-        console.log(workflow)
         if(!_.isEqual(this.workflow, workflow)){
-          console.log("asd")
           this.workflow = workflow;
           this.afterWorkflowUpdate(true);
         }
       }
     )
     this.graph = new global.LGraph();
-    this.canvas = new global.LGraphCanvas("#mycanvas", this.graph);
+    this.canvas = new global.LGraphCanvas(this.element.nativeElement.querySelector('canvas'), this.graph);
 
     let self = this;
     this.canvas.getNodeMenuOptions = this.getNodeMenuOptions();
@@ -61,10 +59,8 @@ export class CanvasGraphComponent implements OnInit {
 
   // refresh graph
   afterWorkflowUpdate(reRender=false){
-      console.log(this.workflow)
       this.onWorkflowChanged.emit(_.cloneDeep(this.workflow));
       if(reRender){
-        console.log("redraw")
         this.drawNodes();
       }
   }
@@ -191,6 +187,35 @@ export class CanvasGraphComponent implements OnInit {
     if(!this.workflow) return;
     this.graph.clear();
     let coordinateArray = this.distributePosition();
+
+    // sort based on wait on
+    // chain running workflow
+    let linkPropertyName = 'waitingOn',
+        linkKey = 'instanceId';
+    let chainResult = chainNodes.bind(this)(linkPropertyName, linkKey);
+
+    // this is for workflow defination
+    if(_.isEmpty(chainResult[0])){
+      linkPropertyName = 'wainOn';
+      linkKey = 'label';
+      chainResult = chainNodes.bind(this)('waitOn', 'label')
+    }
+
+    let helperMap = chainResult[0];
+    let leftTasks = chainResult[1];
+
+    // chain the first task, and put all isolated in the tail
+    let helperMapOnlyKey =  _.keys(helperMap)[0];
+    _.forEach(leftTasks, (task) => {
+      if(task[linkKey] === helperMapOnlyKey){
+        helperMap[helperMapOnlyKey] = [task].concat(helperMap[helperMapOnlyKey]);
+      } else {
+        helperMap[helperMapOnlyKey].push(task);
+      }
+    })
+    this.workflow.tasks = _.values(helperMap)[0];
+
+
     // add nodes
     _.forEach(this.workflow.tasks, (task, index) => {
       let taskNode = global.LiteGraph.createNode("rackhd/task");
@@ -200,19 +225,62 @@ export class CanvasGraphComponent implements OnInit {
         coordinateArray[index][0]-taskNode.size[0],
         coordinateArray[index][1]-taskNode.size[1]
       ]
-
       this.graph.add(taskNode);
     });
+
     // draw links
     let allNodes = this.graph.findNodesByType('rackhd/task');
     _.forEach(allNodes, (taskNode, index) => {
       let task = taskNode.properties.task;
-      if(!_.isUndefined(task.waitOn)){
+
+      // for editor: workflow define
+      if(!_.isUndefined(task.waitOn) &&  !_.isEmpty(task.waitOn)){
         let originNode = _.find(allNodes, (node) => node.title === _.keys(task.waitOn)[0]);
         let originSlot = _.findIndex(originNode.outputs, (o) => o.name === _.values(task.waitOn)[0]);
         originNode.connect(originSlot, taskNode, 0);
       }
+
+      // for viewer: running workflow
+      if(!_.isUndefined(task.waitingOn) && !_.isEmpty(task.waitingOn)){
+        let originNode = _.find(allNodes, (node) => node.properties.task.instanceId === _.keys(task.waitingOn)[0]);
+        let originSlot = _.findIndex(originNode.outputs, (o) =>  {
+          if(typeof _.values(task.waitingOn)[0] === 'object'){
+            return o.name === _.values(task.waitingOn)[0][0];
+          } else {
+            return _.values(task.waitingOn)[0];
+          }
+        });
+        originNode.connect(originSlot, taskNode, 0);
+      }
     });
+
+    // helpers
+    function chainNodes(linkPropertyName, linkKeyName){
+      let helperMap = {};
+      let leftTasks = [];
+      // 1 init helperMap
+      // waitingOn is running workflow
+      _.forEach(this.workflow.tasks, (task) => {
+        if(!_.isUndefined(task[linkPropertyName]) && !_.isEmpty(task[linkPropertyName])){
+          let linkKey = _.keys(task[linkPropertyName])[0];
+          (helperMap[linkKey] || (helperMap[linkKey]=[])).push(task);
+        } else {
+          leftTasks.push(task);
+        }
+      })
+      // 2 intergrate into one chain
+      while(_.keys(helperMap).length > 1){
+        _.forEach(helperMap, (taskArray, waitingOnInstanceId) => {
+          _.forEach(taskArray, (task) => {
+              if(task.instanceId in helperMap) {
+                helperMap[waitingOnInstanceId] = helperMap[waitingOnInstanceId].concat(helperMap[task.instanceId]);
+                delete helperMap[task.instanceId];
+              }
+          });
+        })
+      }
+      return [helperMap, leftTasks];
+    }
   }
 
   // helper of node positions
