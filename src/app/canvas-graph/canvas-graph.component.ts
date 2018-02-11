@@ -16,6 +16,7 @@ export class CanvasGraphComponent implements OnInit {
   @ViewChild('mycanvas') editorCanvas: any;
   @ViewChild('jsoneditor') jsonEditor: any;
   @Input() onWorkflowInput: any;
+  @Input() editable = true;
   @Output() onWorkflowChanged = new EventEmitter();
 
   workflow: any
@@ -46,7 +47,7 @@ export class CanvasGraphComponent implements OnInit {
     this.graph = new global.LGraph();
     this.canvas = new global.LGraphCanvas(this.element.nativeElement.querySelector('canvas'), this.graph);
 
-    let self = this;
+    // overwrite canvas prototype method to inject customized logic
     this.canvas.getNodeMenuOptions = this.getNodeMenuOptions();
     this.canvas.getCanvasMenuOptions = this.getCanvasMenuOptions();
 
@@ -116,6 +117,7 @@ export class CanvasGraphComponent implements OnInit {
   getCanvasMenuOptions() {
     let self = this;
     return function(){
+      if(!self.editable) return [];
     	let options = [
     			{ content:"Add Node", has_submenu: true, callback: self.addNode()}
     		];
@@ -126,6 +128,7 @@ export class CanvasGraphComponent implements OnInit {
   addNode(){
     // mothod 1 for keep current context
     let self = this;
+    // this function is referenced from lightgraph src.
     return function(node, options, e, preMenu){
     	let canvas = global.LGraphCanvas.active_canvas;
     	let ref_window = canvas.getCanvasWindow();
@@ -168,6 +171,7 @@ export class CanvasGraphComponent implements OnInit {
     let self = this;
     return function(node){
       let options = [];
+      if(!self.editable) return options;
       if( node.removable !== false )
           options.push(null,{content:"Remove", callback: self.removeNode.bind(self) });
       if(node.graph && node.graph.onGetNodeMenuOptions )
