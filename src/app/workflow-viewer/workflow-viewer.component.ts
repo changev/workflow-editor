@@ -391,7 +391,7 @@ export class WorkflowViewerComponent implements OnInit, AfterViewInit {
                 "name": "Task.Catalog.dmi",
                 "waitingOn": {},
                 "ignoreFailure": false,
-                "state": "succeeded",
+                "state": "finished",
                 "terminalOnStates": [],
                 "taskStartTime": "2018-02-09T03:22:56.134Z",
                 "taskEndTime": "2018-02-09T03:23:32.862Z"

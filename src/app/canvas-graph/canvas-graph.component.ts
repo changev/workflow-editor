@@ -31,7 +31,8 @@ export class CanvasGraphComponent implements OnInit {
     this.nodeExtensionService.init(
       // use bind to keep context
       this.afterInputConnect.bind(this),
-      this.afterInputDisconnect.bind(this)
+      this.afterInputDisconnect.bind(this),
+      this.afterClick.bind(this)
     );
   }
 
@@ -92,6 +93,36 @@ export class CanvasGraphComponent implements OnInit {
 
   afterInputDisconnect(taskToBeChanged){
       this.changeTaskWaitOn(taskToBeChanged);
+  }
+
+  afterClick(e, node){
+  	if(!node || !node.properties)
+  		return;
+
+  	var self = this;
+  	var canvas = global.LGraphCanvas.active_canvas;
+  	var ref_window = canvas.getCanvasWindow();
+
+  	var entries = [];
+		var value = node.properties.log;
+		//value could contain invalid html characters, clean that
+		// value = global.LGraphCanvas.decodeHTML(value);
+		entries.push({content: '<span id="errorLogText">' + value + "</span><h4>click to clipboard</h4>", value: value});
+  	if(!entries.length)
+  		return;
+
+  	let menu = new global.LiteGraph.ContextMenu(entries, {event: e, callback: copyToClipboard, parentMenu: null, allow_html: true, node: node },ref_window);
+
+    function copyToClipboard(){
+      let inp =document.createElement('input');
+      document.body.appendChild(inp)
+      inp.value =document.getElementById('errorLogText').textContent;
+      inp.select();
+      document.execCommand('copy',false);
+      inp.remove();
+    }
+
+  	return false;
   }
 
   //helpers
@@ -225,10 +256,40 @@ export class CanvasGraphComponent implements OnInit {
       let taskNode = global.LiteGraph.createNode("rackhd/task");
       taskNode.title = task.label;
       taskNode.properties.task = task;
+      taskNode.state = task.state;
       taskNode.pos = [
         coordinateArray[index][0]-taskNode.size[0],
         coordinateArray[index][1]-taskNode.size[1]
       ]
+
+      // set color
+      if(task.state){
+        let colors = CONSTS.colors;
+        let state = task.state;
+        let fgColor = colors[state].color;
+        let bgColor = colors[state].bgColor;
+        if(fgColor) taskNode.color = fgColor;
+        if(bgColor) taskNode.bgcolor = bgColor;
+      }
+
+      // get error log of invalid tasks
+      if(task.state === 'failed' || task.state === 'error') {
+          // this is just mock, may be gotten by workflow services:
+          //   getLogOfTask(instanceId : string){...}
+          //   and then  replace(/\n/g, "<br>"); !important
+          taskNode.properties.log =
+          "Error: Encountered a failure running remote commands <br>\
+            at /RackHD/on-tasks/lib/utils/job-utils/command-util.js:89:23 <br>\
+            at tryCatcher (/RackHD/on-core/node_modules/bluebird/js/main/util.js:26:23) <br>\
+            at MappingPromiseArray._promiseFulfilled (/RackHD/on-core/node_modules/bluebird/js/main/map.js:56:38) <br>\
+            at MappingPromiseArray.init (/RackHD/on-core/node_modules/bluebird/js/main/promise_array.js:92:18) <br>\
+            at MappingPromiseArray.init (/RackHD/on-core/node_modules/bluebird/js/main/map.js:29:23) <br>\
+            at Async._drainQueue (/RackHD/on-core/node_modules/bluebird/js/main/async.js:128:12)<br> \
+            at Async._drainQueues (/RackHD/on-core/node_modules/bluebird/js/main/async.js:133:10)<br> \
+            at Immediate.Async.drainQueues [as _onImmediate] (/RackHD/on-core/node_modules/bluebird/js/main/async.js:15:14)<br>\
+            at processImmediate [as _immediateCallback] (timers.js:383:17)";
+      }
+
       this.graph.add(taskNode);
     });
 
@@ -257,8 +318,9 @@ export class CanvasGraphComponent implements OnInit {
         originNode.connect(originSlot, taskNode, 0);
       }
     });
+    // end draw
 
-    // helpers
+    // ============================= helpers ==================================
     function chainNodes(linkPropertyName, linkKeyName){
       let helperMap = {};
       let leftTasks = [];
@@ -285,6 +347,7 @@ export class CanvasGraphComponent implements OnInit {
       }
       return [helperMap, leftTasks];
     }
+
   }
 
   // helper of node positions
