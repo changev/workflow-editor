@@ -106,14 +106,17 @@ export class CanvasGraphComponent implements OnInit {
   	if(!node || !node.properties)
   		return;
 
-  	var self = this;
-  	var canvas = global.LGraphCanvas.active_canvas;
-  	var ref_window = canvas.getCanvasWindow();
+  	let self = this;
+  	let canvas = global.LGraphCanvas.active_canvas;
+  	let ref_window = canvas.getCanvasWindow();
 
-  	var entries = [];
-		var value = node.properties.log;
-		//value could contain invalid html characters, clean that
+  	let entries = [];
+		let value = node.properties.log;
+    // if value could contain invalid html characters, clean that
 		// value = global.LGraphCanvas.decodeHTML(value);
+    // for better view, please
+    //   ****value.replace(/\n/g, "<br>"); !important****
+
 		entries.push({content: '<span id="errorLogText">' + value + "</span><h4>click to clipboard</h4>", value: value});
   	if(!entries.length)
   		return;
@@ -123,7 +126,8 @@ export class CanvasGraphComponent implements OnInit {
     function copyToClipboard(){
       let inp =document.createElement('input');
       document.body.appendChild(inp)
-      inp.value =document.getElementById('errorLogText').textContent;
+      // for better view, if you replace \n with <br>, please recover them here
+      inp.value = document.getElementById('errorLogText').textContent;
       inp.select();
       document.execCommand('copy',false);
       inp.remove();
@@ -255,7 +259,7 @@ export class CanvasGraphComponent implements OnInit {
           node.title = node.properties.task.label;
           // add node to canvas
     			canvas.graph.add( node );
-          // update var workflow
+          // update let workflow
           self.addTaskForWorkflow(node.properties.task);
     		}
     	}
