@@ -1,4 +1,11 @@
-import { Component, OnInit, ViewChild, Input, Output, EventEmitter, ElementRef } from '@angular/core';
+import { Component, OnInit, ViewChild, Input, Output, EventEmitter, ElementRef
+} from '@angular/core';
+import { Subject } from 'rxjs/Subject';
+import {
+   debounceTime, distinctUntilChanged, switchMap
+ } from 'rxjs/operators';
+
+
 import * as _ from 'lodash';
 import { NodeExtensionService } from './node-extension.service';
 import { WorkflowService } from '../workflow.service';
@@ -159,38 +166,97 @@ export class CanvasGraphComponent implements OnInit {
   addNode(){
     // mothod 1 for keep current context
     let self = this;
+
     // this function is referenced from lightgraph src.
     return function(node, options, e, preMenu){
+      let preE = e;
     	let canvas = global.LGraphCanvas.active_canvas;
     	let ref_window = canvas.getCanvasWindow();
 
     	let entries = [];
     	entries.push({ content: 'rackhd', has_submenu: true});
 
+      // show rackhd menu
     	let menu = new global.LiteGraph.ContextMenu( entries, { event: e, callback: innerClick, parentMenu: preMenu }, ref_window);
+
+      // show task list menu
+      let filterInputHtml = "<input id='graphNodeTypeFilter' placeholder='filter'>";
     	function innerClick( v, option, e ){
         // just mock here, should be gotten from backend service
     		let node_types = ["Task.poller", "Task.smi"];
     		let values = [];
+        values.push({content: filterInputHtml});
     		for(let i in node_types)
     			values.push( { content: node_types[i]});
-    		new global.LiteGraph.ContextMenu( values, {event: e, callback: innerCreate, parentMenu: menu }, ref_window);
+    		let taskMenu = new global.LiteGraph.ContextMenu( values, {event: e, callback: innerCreate, parentMenu: menu, allow_html: true }, ref_window);
+
+        // ==== begin for search ====
+        // functions  to implements search
+        let taskFilter = new Subject();
+        function inputTerm(term : string){
+          console.log("asd")
+          taskFilter.next(term);
+        }
+        bindInput();
+        let filterTrigger = taskFilter.pipe(
+          debounceTime(300),
+          distinctUntilChanged(),
+          switchMap((term: string) => {
+            reGenerateMenu(term);
+            return 'whatever';
+          })
+        )
+        filterTrigger.subscribe();
+
+        //helpers
+        function reGenerateMenu(term: string){
+          // close old task list menu and add a new one;
+          taskMenu.close(undefined, true);
+          // just mock here
+      		let values = [];
+          values.push({content: filterInputHtml});
+          let filteredTypes = _.filter(node_types, (type) => type.includes(term));
+      		for(let i in filteredTypes)
+      			values.push( { content: filteredTypes[i]});
+          taskMenu = new global.LiteGraph.ContextMenu( values, {event: e, callback: innerCreate, parentMenu: menu, allow_html: true }, ref_window);
+          // remember to bind new input again, because the old one is destroyed when menu close.
+          // remember to add fill the new input with current term, make it more proper.
+          bindInput(term);
+        }
+        function bindInput(initValue=''){
+          let input = document.getElementById('graphNodeTypeFilter');
+          if(initValue)
+            (input as HTMLInputElement).value = initValue;
+          input.addEventListener('input', ()=>inputTerm((input as HTMLInputElement).value));
+        }
+        // ==== end for search ====
+
     		return false;
     	}
 
+
+
+      // click actions of task list menu
     	function innerCreate( v, e )
     	{
+        // keep menu after click input bar
+        if(v.content === filterInputHtml){
+          return true;
+        }
+
     		let firstEvent = preMenu.getFirstEvent();
     		let node = global.LiteGraph.createNode("rackhd/task");
     		if(node)
     		{
+          // update node position
     			node.pos = canvas.convertEventToCanvas( firstEvent );
+          // update node data
           node.properties.task = self.workflowService.getTaskTemplateByType(v.content);
           node.title = node.properties.task.label;
+          // add node to canvas
     			canvas.graph.add( node );
-          self.addTaskForWorkflow(node.properties.task);{
-          }
-
+          // update var workflow
+          self.addTaskForWorkflow(node.properties.task);
     		}
     	}
 
