@@ -311,14 +311,16 @@ export class CanvasGraphComponent implements OnInit {
 
     // chain the first task, and put all isolated in the tail
     let helperMapOnlyKey =  _.keys(helperMap)[0];
-    _.forEach(leftTasks, (task) => {
-      if(task[linkKey] === helperMapOnlyKey){
-        helperMap[helperMapOnlyKey] = [task].concat(helperMap[helperMapOnlyKey]);
-      } else {
-        helperMap[helperMapOnlyKey].push(task);
-      }
-    })
-    this.workflow.tasks = _.values(helperMap)[0];
+    if(helperMapOnlyKey){
+      _.forEach(leftTasks, (task) => {
+        if(task[linkKey] === helperMapOnlyKey){
+          helperMap[helperMapOnlyKey] = [task].concat(helperMap[helperMapOnlyKey]);
+        } else {
+          helperMap[helperMapOnlyKey].push(task);
+        }
+      })
+      this.workflow.tasks = _.values(helperMap)[0];
+    }
 
 
     // add nodes
